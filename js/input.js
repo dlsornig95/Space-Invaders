@@ -36,7 +36,9 @@ class InputHandler {
             }
             if (e.key === ' ') {
                 e.preventDefault();
-                if (!this.firePressed) {
+                if (typeof game !== 'undefined' && game.state === 'enterInitials') {
+                    game.handleEnter();
+                } else if (!this.firePressed) {
                     this.keys.fire = true;
                     this.firePressed = true;
                 }
