@@ -6,12 +6,14 @@ class Game {
         this.canvas.width = 800;
         this.canvas.height = 600;
 
-        this.state = 'start';
+        this.state = 'loading';
         this.score = 0;
         this.level = 1;
         this.paused = false;
 
-        this.leaderboard = this.loadLeaderboard();
+        this.leaderboard = [];
+        this.leaderboardLoaded = false;
+        this.loadLeaderboardFromFirebase();
 
         this.player = null;
         this.formation = null;
@@ -44,32 +46,36 @@ class Game {
         }
     }
 
-    loadLeaderboard() {
-        const data = localStorage.getItem('spaceInvadersLeaderboard');
-        if (data) {
-            return JSON.parse(data);
+    async loadLeaderboardFromFirebase() {
+        try {
+            this.leaderboard = await leaderboardDB.getTopScores(10);
+            this.leaderboardLoaded = true;
+            this.state = 'start';
+        } catch (error) {
+            console.error('Failed to load leaderboard:', error);
+            this.leaderboard = [];
+            this.leaderboardLoaded = true;
+            this.state = 'start';
         }
-        return [
-            { initials: '---', score: 0 },
-            { initials: '---', score: 0 },
-            { initials: '---', score: 0 }
-        ];
     }
 
-    saveLeaderboard() {
-        localStorage.setItem('spaceInvadersLeaderboard', JSON.stringify(this.leaderboard));
+    async refreshLeaderboard() {
+        try {
+            this.leaderboard = await leaderboardDB.getTopScores(10);
+        } catch (error) {
+            console.error('Failed to refresh leaderboard:', error);
+        }
     }
 
     isHighScore(score) {
-        return score > this.leaderboard[2].score;
+        if (this.leaderboard.length < 10) return score > 0;
+        return score > this.leaderboard[this.leaderboard.length - 1].score;
     }
 
-    addToLeaderboard(initials, score) {
-        const entry = { initials: initials.join(''), score };
-        this.leaderboard.push(entry);
-        this.leaderboard.sort((a, b) => b.score - a.score);
-        this.leaderboard = this.leaderboard.slice(0, 3);
-        this.saveLeaderboard();
+    async addToLeaderboard(initials, score) {
+        const initialsStr = initials.join('');
+        await leaderboardDB.addScore(initialsStr, score, this.level);
+        await this.refreshLeaderboard();
     }
 
     getHighScore() {
@@ -87,12 +93,13 @@ class Game {
         soundManager.playTone(440, 0.05, 'square', 0.1);
     }
 
-    confirmInitialLetter() {
+    async confirmInitialLetter() {
         this.currentInitialIndex++;
         soundManager.playTone(660, 0.1, 'square', 0.2);
 
         if (this.currentInitialIndex >= 3) {
-            this.addToLeaderboard(this.initials, this.score);
+            this.state = 'saving';
+            await this.addToLeaderboard(this.initials, this.score);
             this.state = 'gameover';
             this.initials = ['A', 'A', 'A'];
             this.currentInitialIndex = 0;
@@ -169,6 +176,10 @@ class Game {
             this.initialCycleDelay--;
         }
 
+        if (this.state === 'loading' || this.state === 'saving') {
+            return;
+        }
+
         if (this.state === 'start' || this.state === 'gameover') {
             return;
         }
@@ -237,6 +248,16 @@ class Game {
         this.ctx.fillStyle = '#000';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
+        if (this.state === 'loading') {
+            this.renderLoadingScreen();
+            return;
+        }
+
+        if (this.state === 'saving') {
+            this.renderSavingScreen();
+            return;
+        }
+
         if (this.state === 'start') {
             this.renderStartScreen();
             return;
@@ -272,61 +293,84 @@ class Game {
         }
     }
 
-    renderStartScreen() {
+    renderLoadingScreen() {
         this.ctx.fillStyle = '#0f0';
         this.ctx.font = '48px Courier New';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('SPACE INVADERS', this.canvas.width / 2, 100);
+        this.ctx.fillText('SPACE INVADERS', this.canvas.width / 2, 250);
 
         this.ctx.font = '24px Courier New';
         this.ctx.fillStyle = '#ff0';
-        this.ctx.fillText('HIGH SCORES', this.canvas.width / 2, 170);
+        this.ctx.fillText('Loading Leaderboard...', this.canvas.width / 2, 320);
+    }
+
+    renderSavingScreen() {
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        this.ctx.fillStyle = '#ff0';
+        this.ctx.font = '36px Courier New';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('SAVING SCORE...', this.canvas.width / 2, this.canvas.height / 2);
+    }
+
+    renderStartScreen() {
+        this.ctx.fillStyle = '#0f0';
+        this.ctx.font = '36px Courier New';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('SPACE INVADERS', this.canvas.width / 2, 50);
 
         this.ctx.font = '20px Courier New';
+        this.ctx.fillStyle = '#ff0';
+        this.ctx.fillText('GLOBAL HIGH SCORES', this.canvas.width / 2, 90);
+
+        this.ctx.font = '16px Courier New';
         this.ctx.fillStyle = '#0f0';
-        for (let i = 0; i < 3; i++) {
+        const displayCount = Math.min(this.leaderboard.length, 10);
+        for (let i = 0; i < displayCount; i++) {
             const entry = this.leaderboard[i];
-            const rank = i + 1;
-            const y = 210 + i * 35;
+            const rank = (i + 1).toString().padStart(2, ' ');
+            const y = 120 + i * 28;
             this.ctx.fillText(`${rank}. ${entry.initials}  ${entry.score.toString().padStart(6, '0')}`, this.canvas.width / 2, y);
         }
+        if (displayCount === 0) {
+            this.ctx.fillText('No scores yet - be the first!', this.canvas.width / 2, 150);
+        }
 
-        this.ctx.font = '18px Courier New';
+        const controlsY = Math.max(410, 130 + displayCount * 28);
+        this.ctx.font = '16px Courier New';
         this.ctx.fillStyle = '#0f0';
-        this.ctx.fillText('Controls:', this.canvas.width / 2, 340);
-        this.ctx.fillText('Arrow Keys / A,D - Move', this.canvas.width / 2, 370);
-        this.ctx.fillText('Space - Shoot  |  P - Pause', this.canvas.width / 2, 400);
+        this.ctx.fillText('Arrow Keys / A,D - Move  |  Space - Shoot  |  P - Pause', this.canvas.width / 2, controlsY);
 
         this.ctx.fillStyle = '#ff0';
-        this.ctx.font = '24px Courier New';
-        this.ctx.fillText('Press ENTER or FIRE to Start', this.canvas.width / 2, 480);
+        this.ctx.font = '22px Courier New';
+        this.ctx.fillText('Press ENTER or FIRE to Start', this.canvas.width / 2, controlsY + 50);
     }
 
     renderGameOverScreen() {
-        this.player.render(this.ctx);
-        this.formation.render(this.ctx);
-
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         this.ctx.fillStyle = '#f00';
-        this.ctx.font = '48px Courier New';
+        this.ctx.font = '40px Courier New';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('GAME OVER', this.canvas.width / 2, 120);
+        this.ctx.fillText('GAME OVER', this.canvas.width / 2, 50);
 
         this.ctx.fillStyle = '#0f0';
-        this.ctx.font = '24px Courier New';
-        this.ctx.fillText(`Score: ${this.score}  Level: ${this.level}`, this.canvas.width / 2, 180);
+        this.ctx.font = '20px Courier New';
+        this.ctx.fillText(`Your Score: ${this.score}  Level: ${this.level}`, this.canvas.width / 2, 90);
 
         this.ctx.fillStyle = '#ff0';
-        this.ctx.fillText('HIGH SCORES', this.canvas.width / 2, 240);
+        this.ctx.font = '18px Courier New';
+        this.ctx.fillText('GLOBAL HIGH SCORES', this.canvas.width / 2, 130);
 
-        this.ctx.font = '20px Courier New';
+        this.ctx.font = '16px Courier New';
         this.ctx.fillStyle = '#0f0';
-        for (let i = 0; i < 3; i++) {
+        const displayCount = Math.min(this.leaderboard.length, 10);
+        for (let i = 0; i < displayCount; i++) {
             const entry = this.leaderboard[i];
-            const rank = i + 1;
-            const y = 280 + i * 35;
+            const rank = (i + 1).toString().padStart(2, ' ');
+            const y = 160 + i * 26;
             this.ctx.fillText(`${rank}. ${entry.initials}  ${entry.score.toString().padStart(6, '0')}`, this.canvas.width / 2, y);
         }
 
