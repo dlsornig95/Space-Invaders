@@ -75,8 +75,12 @@ class InputHandler {
         if (btnLeft) {
             btnLeft.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                this.keys.left = true;
                 soundManager.resumeContext();
+                if (typeof game !== 'undefined' && game.state === 'enterInitials') {
+                    game.cycleInitialLetter(-1);
+                } else {
+                    this.keys.left = true;
+                }
             });
             btnLeft.addEventListener('touchend', (e) => {
                 e.preventDefault();
@@ -87,8 +91,12 @@ class InputHandler {
         if (btnRight) {
             btnRight.addEventListener('touchstart', (e) => {
                 e.preventDefault();
-                this.keys.right = true;
                 soundManager.resumeContext();
+                if (typeof game !== 'undefined' && game.state === 'enterInitials') {
+                    game.cycleInitialLetter(1);
+                } else {
+                    this.keys.right = true;
+                }
             });
             btnRight.addEventListener('touchend', (e) => {
                 e.preventDefault();

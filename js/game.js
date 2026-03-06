@@ -377,7 +377,7 @@ class Game {
 
         this.ctx.fillStyle = '#0f0';
         this.ctx.font = '18px Courier New';
-        this.ctx.fillText('UP/DOWN to change letter', this.canvas.width / 2, 500);
+        this.ctx.fillText('UP/DOWN or LEFT/RIGHT to change', this.canvas.width / 2, 500);
         this.ctx.fillText('ENTER/FIRE to confirm', this.canvas.width / 2, 530);
     }
 
