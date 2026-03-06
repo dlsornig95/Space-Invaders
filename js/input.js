@@ -19,7 +19,22 @@ class InputHandler {
             if (e.key === 'ArrowRight' || e.key === 'd') {
                 this.keys.right = true;
             }
-            if (e.key === ' ' || e.key === 'ArrowUp') {
+            if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                if (typeof game !== 'undefined' && game.state === 'enterInitials') {
+                    game.cycleInitialLetter(1);
+                } else if (!this.firePressed) {
+                    this.keys.fire = true;
+                    this.firePressed = true;
+                }
+            }
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                if (typeof game !== 'undefined' && game.state === 'enterInitials') {
+                    game.cycleInitialLetter(-1);
+                }
+            }
+            if (e.key === ' ') {
                 e.preventDefault();
                 if (!this.firePressed) {
                     this.keys.fire = true;

@@ -8,9 +8,10 @@ class Game {
 
         this.state = 'start';
         this.score = 0;
-        this.highScore = parseInt(localStorage.getItem('spaceInvadersHighScore')) || 0;
         this.level = 1;
         this.paused = false;
+
+        this.leaderboard = this.loadLeaderboard();
 
         this.player = null;
         this.formation = null;
@@ -19,6 +20,10 @@ class Game {
 
         this.levelTransitionTimer = 0;
         this.levelTransitionDuration = 120;
+
+        this.initials = ['A', 'A', 'A'];
+        this.currentInitialIndex = 0;
+        this.initialCycleDelay = 0;
 
         this.setupMuteButton();
         this.resizeCanvas();
@@ -36,6 +41,61 @@ class Game {
                 const muted = soundManager.toggleMute();
                 btn.textContent = muted ? 'Sound: OFF' : 'Sound: ON';
             });
+        }
+    }
+
+    loadLeaderboard() {
+        const data = localStorage.getItem('spaceInvadersLeaderboard');
+        if (data) {
+            return JSON.parse(data);
+        }
+        return [
+            { initials: '---', score: 0 },
+            { initials: '---', score: 0 },
+            { initials: '---', score: 0 }
+        ];
+    }
+
+    saveLeaderboard() {
+        localStorage.setItem('spaceInvadersLeaderboard', JSON.stringify(this.leaderboard));
+    }
+
+    isHighScore(score) {
+        return score > this.leaderboard[2].score;
+    }
+
+    addToLeaderboard(initials, score) {
+        const entry = { initials: initials.join(''), score };
+        this.leaderboard.push(entry);
+        this.leaderboard.sort((a, b) => b.score - a.score);
+        this.leaderboard = this.leaderboard.slice(0, 3);
+        this.saveLeaderboard();
+    }
+
+    getHighScore() {
+        return this.leaderboard[0].score;
+    }
+
+    cycleInitialLetter(direction) {
+        if (this.initialCycleDelay > 0) return;
+        this.initialCycleDelay = 8;
+
+        const alphabet = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+        let currentIndex = alphabet.indexOf(this.initials[this.currentInitialIndex]);
+        currentIndex = (currentIndex + direction + 26) % 26;
+        this.initials[this.currentInitialIndex] = alphabet[currentIndex];
+        soundManager.playTone(440, 0.05, 'square', 0.1);
+    }
+
+    confirmInitialLetter() {
+        this.currentInitialIndex++;
+        soundManager.playTone(660, 0.1, 'square', 0.2);
+
+        if (this.currentInitialIndex >= 3) {
+            this.addToLeaderboard(this.initials, this.score);
+            this.state = 'gameover';
+            this.initials = ['A', 'A', 'A'];
+            this.currentInitialIndex = 0;
         }
     }
 
@@ -78,12 +138,14 @@ class Game {
     }
 
     gameOver() {
-        this.state = 'gameover';
-        if (this.score > this.highScore) {
-            this.highScore = this.score;
-            localStorage.setItem('spaceInvadersHighScore', this.highScore);
-        }
         soundManager.playGameOver();
+        if (this.isHighScore(this.score)) {
+            this.state = 'enterInitials';
+            this.initials = ['A', 'A', 'A'];
+            this.currentInitialIndex = 0;
+        } else {
+            this.state = 'gameover';
+        }
     }
 
     togglePause() {
@@ -97,11 +159,21 @@ class Game {
             this.startGame();
         } else if (this.state === 'gameover') {
             this.startGame();
+        } else if (this.state === 'enterInitials') {
+            this.confirmInitialLetter();
         }
     }
 
     update() {
+        if (this.initialCycleDelay > 0) {
+            this.initialCycleDelay--;
+        }
+
         if (this.state === 'start' || this.state === 'gameover') {
+            return;
+        }
+
+        if (this.state === 'enterInitials') {
             return;
         }
 
@@ -175,6 +247,11 @@ class Game {
             return;
         }
 
+        if (this.state === 'enterInitials') {
+            this.renderEnterInitials();
+            return;
+        }
+
         if (this.state === 'levelTransition') {
             this.renderLevelTransition();
             return;
@@ -199,48 +276,109 @@ class Game {
         this.ctx.fillStyle = '#0f0';
         this.ctx.font = '48px Courier New';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('SPACE INVADERS', this.canvas.width / 2, 150);
+        this.ctx.fillText('SPACE INVADERS', this.canvas.width / 2, 100);
+
+        this.ctx.font = '24px Courier New';
+        this.ctx.fillStyle = '#ff0';
+        this.ctx.fillText('HIGH SCORES', this.canvas.width / 2, 170);
 
         this.ctx.font = '20px Courier New';
-        this.ctx.fillText('Controls:', this.canvas.width / 2, 250);
-        this.ctx.fillText('Arrow Keys / A,D - Move', this.canvas.width / 2, 290);
-        this.ctx.fillText('Space / Up Arrow - Shoot', this.canvas.width / 2, 320);
-        this.ctx.fillText('P / Escape - Pause', this.canvas.width / 2, 350);
+        this.ctx.fillStyle = '#0f0';
+        for (let i = 0; i < 3; i++) {
+            const entry = this.leaderboard[i];
+            const rank = i + 1;
+            const y = 210 + i * 35;
+            this.ctx.fillText(`${rank}. ${entry.initials}  ${entry.score.toString().padStart(6, '0')}`, this.canvas.width / 2, y);
+        }
+
+        this.ctx.font = '18px Courier New';
+        this.ctx.fillStyle = '#0f0';
+        this.ctx.fillText('Controls:', this.canvas.width / 2, 340);
+        this.ctx.fillText('Arrow Keys / A,D - Move', this.canvas.width / 2, 370);
+        this.ctx.fillText('Space - Shoot  |  P - Pause', this.canvas.width / 2, 400);
 
         this.ctx.fillStyle = '#ff0';
         this.ctx.font = '24px Courier New';
-        this.ctx.fillText('Press ENTER or FIRE to Start', this.canvas.width / 2, 450);
-
-        this.ctx.fillStyle = '#0f0';
-        this.ctx.font = '18px Courier New';
-        this.ctx.fillText(`High Score: ${this.highScore}`, this.canvas.width / 2, 520);
+        this.ctx.fillText('Press ENTER or FIRE to Start', this.canvas.width / 2, 480);
     }
 
     renderGameOverScreen() {
         this.player.render(this.ctx);
         this.formation.render(this.ctx);
 
-        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
 
         this.ctx.fillStyle = '#f00';
         this.ctx.font = '48px Courier New';
         this.ctx.textAlign = 'center';
-        this.ctx.fillText('GAME OVER', this.canvas.width / 2, 200);
+        this.ctx.fillText('GAME OVER', this.canvas.width / 2, 120);
 
         this.ctx.fillStyle = '#0f0';
         this.ctx.font = '24px Courier New';
-        this.ctx.fillText(`Score: ${this.score}`, this.canvas.width / 2, 280);
-        this.ctx.fillText(`Level: ${this.level}`, this.canvas.width / 2, 320);
+        this.ctx.fillText(`Score: ${this.score}  Level: ${this.level}`, this.canvas.width / 2, 180);
 
-        if (this.score >= this.highScore) {
-            this.ctx.fillStyle = '#ff0';
-            this.ctx.fillText('NEW HIGH SCORE!', this.canvas.width / 2, 370);
+        this.ctx.fillStyle = '#ff0';
+        this.ctx.fillText('HIGH SCORES', this.canvas.width / 2, 240);
+
+        this.ctx.font = '20px Courier New';
+        this.ctx.fillStyle = '#0f0';
+        for (let i = 0; i < 3; i++) {
+            const entry = this.leaderboard[i];
+            const rank = i + 1;
+            const y = 280 + i * 35;
+            this.ctx.fillText(`${rank}. ${entry.initials}  ${entry.score.toString().padStart(6, '0')}`, this.canvas.width / 2, y);
         }
 
         this.ctx.fillStyle = '#ff0';
         this.ctx.font = '20px Courier New';
         this.ctx.fillText('Press ENTER or FIRE to Restart', this.canvas.width / 2, 450);
+    }
+
+    renderEnterInitials() {
+        this.ctx.fillStyle = 'rgba(0, 0, 0, 0.9)';
+        this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+
+        this.ctx.fillStyle = '#ff0';
+        this.ctx.font = '36px Courier New';
+        this.ctx.textAlign = 'center';
+        this.ctx.fillText('NEW HIGH SCORE!', this.canvas.width / 2, 150);
+
+        this.ctx.fillStyle = '#0f0';
+        this.ctx.font = '48px Courier New';
+        this.ctx.fillText(this.score.toString(), this.canvas.width / 2, 220);
+
+        this.ctx.fillStyle = '#fff';
+        this.ctx.font = '24px Courier New';
+        this.ctx.fillText('ENTER YOUR INITIALS', this.canvas.width / 2, 300);
+
+        const spacing = 60;
+        const startX = this.canvas.width / 2 - spacing;
+
+        for (let i = 0; i < 3; i++) {
+            const x = startX + i * spacing;
+            const isActive = i === this.currentInitialIndex;
+
+            if (isActive) {
+                this.ctx.fillStyle = '#ff0';
+                this.ctx.fillText('^', x, 340);
+            }
+
+            this.ctx.fillStyle = isActive ? '#ff0' : '#0f0';
+            this.ctx.font = '48px Courier New';
+            this.ctx.fillText(this.initials[i], x, 400);
+
+            if (isActive) {
+                this.ctx.fillStyle = '#ff0';
+                this.ctx.font = '24px Courier New';
+                this.ctx.fillText('v', x, 440);
+            }
+        }
+
+        this.ctx.fillStyle = '#0f0';
+        this.ctx.font = '18px Courier New';
+        this.ctx.fillText('UP/DOWN to change letter', this.canvas.width / 2, 500);
+        this.ctx.fillText('ENTER/FIRE to confirm', this.canvas.width / 2, 530);
     }
 
     renderLevelTransition() {
@@ -276,7 +414,7 @@ class Game {
         this.ctx.fillText(`Level: ${this.level}`, this.canvas.width / 2, 30);
 
         this.ctx.textAlign = 'right';
-        this.ctx.fillText(`High: ${this.highScore}`, this.canvas.width - 20, 30);
+        this.ctx.fillText(`High: ${this.getHighScore()}`, this.canvas.width - 20, 30);
 
         this.ctx.textAlign = 'left';
         for (let i = 0; i < this.player.lives; i++) {
