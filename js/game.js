@@ -79,6 +79,7 @@ class Game {
     }
 
     getHighScore() {
+        if (this.leaderboard.length === 0) return 0;
         return this.leaderboard[0].score;
     }
 
