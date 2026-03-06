@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Space Invaders</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        <div id="touch-controls">
+            <button id="btn-left" class="touch-btn">&#9664;</button>
+            <button id="btn-fire" class="touch-btn">FIRE</button>
+            <button id="btn-right" class="touch-btn">&#9654;</button>
+        </div>
+    </div>
+    <div id="ui-overlay">
+        <button id="btn-mute" class="ui-btn">Sound: ON</button>
+    </div>
+
+    <script src="js/sound.js"></script>
+    <script src="js/input.js"></script>
+    <script src="js/bullet.js"></script>
+    <script src="js/player.js"></script>
+    <script src="js/invader.js"></script>
+    <script src="js/collision.js"></script>
+    <script src="js/levels.js"></script>
+    <script src="js/game.js"></script>
+</body>
+</html>
